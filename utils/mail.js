@@ -1,33 +1,34 @@
-// utils/mail.js (or wherever this file lives)
+// utils/mail.js
 
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
 dotenv.config();
 
-/**
- * BREVO SMTP TRANSPORT
- * Make sure these env vars are set in your backend:
- *  - BREVO_USER  -> the "Login" from Brevo SMTP (e.g. 9c0xxxx@smtp-brevo.com)
- *  - BREVO_PASS  -> the "Password" / SMTP key from Brevo
- *  - EMAIL       -> the verified sender email in Brevo (from address)
- */
-
+// 🔐 Brevo SMTP transporter
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
   port: 587,
-  secure: false, // STARTTLS
+  secure: false,
   auth: {
     user: process.env.BREVO_USER,
     pass: process.env.BREVO_PASS,
   },
 });
 
-// Generic helper used by all mail functions
+// (optional but useful) test connection once at startup
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("❌ Brevo SMTP connection error:", err);
+  } else {
+    console.log("✅ Brevo SMTP is ready to send emails");
+  }
+});
+
 async function sendEmail({ to, subject, html }) {
   try {
     const info = await transporter.sendMail({
-      from: process.env.EMAIL, // must be a verified sender in Brevo
+      from: process.env.EMAIL, // must be verified in Brevo
       to,
       subject,
       html,
@@ -35,12 +36,15 @@ async function sendEmail({ to, subject, html }) {
 
     console.log("📧 Email sent:", info.messageId);
   } catch (err) {
-    console.error("❌ Email send error:", err);
-    throw new Error("Failed to send email");
+    // ⛔ show full details in server logs
+    console.error("❌ Email send error (Brevo):", err);
+
+    // IMPORTANT: rethrow the ORIGINAL error, not a generic one
+    throw err;
   }
 }
 
-// 🚀 Exported functions (same signatures as before)
+// ==== exported functions stay the same ====
 
 export const sendOtpMail = async (to, otp) => {
   await sendEmail({

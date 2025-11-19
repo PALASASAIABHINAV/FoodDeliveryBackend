@@ -5,9 +5,9 @@ dotenv.config();
 
 import { Resend } from "resend";
 
-// ✅ Resend config (API key + from email)
+// ✅ Resend config
 const resendApiKey = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.EMAIL_FROM; // e.g. "ZentroEat <onboarding@resend.dev>"
+const FROM_EMAIL = process.env.EMAIL_FROM; // ZentroEat <onboarding@resend.dev>
 
 if (!resendApiKey) {
   console.warn("⚠️ RESEND_API_KEY is not set. Emails will fail.");
@@ -18,10 +18,11 @@ if (!FROM_EMAIL) {
 
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
-// Generic helper to send ANY email via Resend
+// Generic helper
 async function sendEmail({ to, subject, html }) {
   if (!resend) {
-    throw new Error("Email service not configured (Resend missing)");
+    console.error("❌ Resend client not configured (missing RESEND_API_KEY)");
+    throw new Error("Email service not configured");
   }
 
   try {
@@ -33,8 +34,9 @@ async function sendEmail({ to, subject, html }) {
     });
 
     if (error) {
-      console.error("❌ Resend email error:", error);
-      throw new Error("Failed to send email");
+      // 👇 VERY IMPORTANT: log full error so we can debug
+      console.error("❌ Resend email error:", JSON.stringify(error, null, 2));
+      throw new Error(`Resend error: ${error.message || "Failed to send email"}`);
     }
 
     console.log("✅ Email sent via Resend:", data);
@@ -44,7 +46,7 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
-// ==== exported functions – same names/signatures as before ====
+// ==== exported functions (same as before) ====
 
 export const sendOtpMail = async (to, otp) => {
   await sendEmail({

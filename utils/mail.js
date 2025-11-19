@@ -1,81 +1,56 @@
+// utils/mail.js (or wherever this file lives)
+
 import dotenv from "dotenv";
-dotenv.config();
-
-// ✅ 1) RESEND SETUP (for Render / production)
-import { Resend } from "resend";
-const resendApiKey = process.env.RESEND_API_KEY || null;
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-const FROM_EMAIL = process.env.EMAIL_FROM || process.env.EMAIL; // fallback
-
-// ✅ 2) NODEMAILER SETUP (fallback for local dev, when RESEND_API_KEY not set)
 import nodemailer from "nodemailer";
 
-const gmailTransporter =
-  !resendApiKey && process.env.EMAIL && process.env.PASS
-    ? nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        auth: {
-          user: process.env.EMAIL,
-          pass: process.env.PASS,
-        },
-      })
-    : null;
+dotenv.config();
 
-// Helper: send via Resend
-async function sendWithResend({ to, subject, html }) {
-  if (!resend) {
-    throw new Error("Resend is not configured");
-  }
+/**
+ * BREVO SMTP TRANSPORT
+ * Make sure these env vars are set in your backend:
+ *  - BREVO_USER  -> the "Login" from Brevo SMTP (e.g. 9c0xxxx@smtp-brevo.com)
+ *  - BREVO_PASS  -> the "Password" / SMTP key from Brevo
+ *  - EMAIL       -> the verified sender email in Brevo (from address)
+ */
 
-  const { data, error } = await resend.emails.send({
-    from: FROM_EMAIL, // e.g. 'FoodHub <noreply@yourdomain.com>'
-    to: Array.isArray(to) ? to : [to],
-    subject,
-    html,
-  });
+const transporter = nodemailer.createTransport({
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false, // STARTTLS
+  auth: {
+    user: process.env.BREVO_USER,
+    pass: process.env.BREVO_PASS,
+  },
+});
 
-  if (error) {
-    console.error("❌ Resend email error:", error);
+// Generic helper used by all mail functions
+async function sendEmail({ to, subject, html }) {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL, // must be a verified sender in Brevo
+      to,
+      subject,
+      html,
+    });
+
+    console.log("📧 Email sent:", info.messageId);
+  } catch (err) {
+    console.error("❌ Email send error:", err);
     throw new Error("Failed to send email");
   }
-
-  console.log("✅ Resend email sent:", data);
 }
 
-// Helper: send via Gmail Nodemailer
-async function sendWithGmail({ to, subject, html }) {
-  if (!gmailTransporter) {
-    throw new Error("Gmail transporter not configured");
-  }
-
-  const info = await gmailTransporter.sendMail({
-    from: process.env.EMAIL,
-    to,
-    subject,
-    html,
-  });
-
-  console.log("✅ Gmail email sent:", info.messageId);
-}
-
-// Unified helper: choose provider based on env
-async function sendEmail(options) {
-  if (resend) {
-    return sendWithResend(options);
-  }
-  return sendWithGmail(options);
-}
-
-// 🚀 Exported functions (signatures unchanged)
+// 🚀 Exported functions (same signatures as before)
 
 export const sendOtpMail = async (to, otp) => {
   await sendEmail({
     to,
     subject: "Reset Your Password",
     html: `
-      <p>Your OTP for password reset is <b>${otp}</b>. It expires in 5 minutes.</p>
+      <h2>ZentroEat – Password Reset</h2>
+      <p>Your OTP for password reset is:</p>
+      <h1 style="letter-spacing:3px;">${otp}</h1>
+      <p>This OTP expires in <b>5 minutes</b>.</p>
     `,
   });
 };
@@ -104,7 +79,8 @@ export const sendOwnerApprovalMail = async (to, name) => {
     subject: "Your owner account has been approved",
     html: `
       <p>Hi ${name},</p>
-      <p>Your owner verification request has been <b>approved</b>. You can now create your shop in the app.</p>
+      <p>Your owner verification request has been <b>approved</b>.</p>
+      <p>You can now create your shop in the ZentroEat app.</p>
     `,
   });
 };
@@ -116,7 +92,7 @@ export const sendOwnerRejectionMail = async (to, name, reason = "") => {
     html: `
       <p>Hi ${name},</p>
       <p>Sorry, your owner verification request has been <b>rejected</b>.</p>
-      ${reason ? `<p>Reason: ${reason}</p>` : ""}
+      ${reason ? `<p><b>Reason:</b> ${reason}</p>` : ""}
       <p>You can contact support for more details.</p>
     `,
   });

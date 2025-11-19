@@ -82,14 +82,21 @@ export const signIn = async (req, res) => {
     }
 };
 
-export const  signOut=async(req,res)=>{
-   try {
-      res.clearCookie("token");
-      return res.status(200).json({message:"logout successfully."});
-   } catch (error) {
-      return res.status(500).json(`signout error ${error}`);
-   }
-}
+export const signOut = async (req, res) => {
+    try {
+        res.cookie("token", "", {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+            expires: new Date(0)   // 👈 Expire immediately
+        });
+
+        return res.status(200).json({ message: "Logout successful." });
+    } catch (error) {
+        return res.status(500).json(`signout error ${error}`);
+    }
+};
+
 
 export const sendOtp=async(req,res)=>{
     try {

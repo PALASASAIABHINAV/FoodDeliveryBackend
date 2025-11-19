@@ -1,54 +1,87 @@
 // utils/mail.js
 
 import dotenv from "dotenv";
+import axios from "axios";
+
 dotenv.config();
 
-import { Resend } from "resend";
+// 🔵 Brevo configuration
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || process.env.EMAIL;
+const SENDER_NAME = process.env.SENDER_NAME || "ZentroEat";
 
-// ✅ Resend config
-const resendApiKey = process.env.RESEND_API_KEY;
-const FROM_EMAIL = process.env.EMAIL_FROM; // ZentroEat <onboarding@resend.dev>
-
-if (!resendApiKey) {
-  console.warn("⚠️ RESEND_API_KEY is not set. Emails will fail.");
+// Startup checks
+if (!BREVO_API_KEY) {
+  console.warn("⚠️ BREVO_API_KEY is not set. Emails will fail.");
 }
-if (!FROM_EMAIL) {
-  console.warn("⚠️ EMAIL_FROM is not set. Emails will fail.");
+if (!SENDER_EMAIL) {
+  console.warn("⚠️ SENDER_EMAIL is not set. Emails will fail.");
 }
 
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-
-// Generic helper
 async function sendEmail({ to, subject, html }) {
-  if (!resend) {
-    console.error("❌ Resend client not configured (missing RESEND_API_KEY)");
-    throw new Error("Email service not configured");
+  console.log("📧 [Brevo] sendEmail called:", { to, subject });
+
+  if (!BREVO_API_KEY) {
+    console.error("❌ [Brevo] Missing BREVO_API_KEY");
+    throw new Error("Email service not configured (no Brevo API key)");
   }
+
+  if (!SENDER_EMAIL) {
+    console.error("❌ [Brevo] Missing SENDER_EMAIL");
+    throw new Error("Email service not configured (no sender email)");
+  }
+
+  // Normalize "to" into array of { email }
+  const recipients = (Array.isArray(to) ? to : [to]).map((email) => ({ email }));
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-    });
+    const response = await axios.post(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        sender: {
+          email: SENDER_EMAIL,
+          name: SENDER_NAME,
+        },
+        to: recipients,
+        subject,
+        htmlContent: html,
+      },
+      {
+        headers: {
+          "api-key": BREVO_API_KEY,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000, // 15s timeout
+      }
+    );
 
-    if (error) {
-      // 👇 VERY IMPORTANT: log full error so we can debug
-      console.error("❌ Resend email error:", JSON.stringify(error, null, 2));
-      throw new Error(`Resend error: ${error.message || "Failed to send email"}`);
-    }
-
-    console.log("✅ Email sent via Resend:", data);
+    console.log("✅ [Brevo] Email sent successfully:", response.data);
   } catch (err) {
-    console.error("❌ sendEmail error:", err);
-    throw err;
+    // Detailed logging for debugging
+    if (err.response) {
+      console.error("❌ [Brevo] API error:", {
+        status: err.response.status,
+        data: err.response.data,
+      });
+      throw new Error(
+        `Brevo API error: ${err.response.status} - ${
+          err.response.data?.message || JSON.stringify(err.response.data)
+        }`
+      );
+    } else if (err.request) {
+      console.error("❌ [Brevo] No response from API:", err.message);
+      throw new Error("Brevo request error: no response from server");
+    } else {
+      console.error("❌ [Brevo] Unexpected error:", err);
+      throw err;
+    }
   }
 }
 
-// ==== exported functions (same as before) ====
+// ================= Exported helpers =================
 
 export const sendOtpMail = async (to, otp) => {
+  console.log("🔐 [Mail] sendOtpMail ->", to);
   await sendEmail({
     to,
     subject: "Reset Your Password",
@@ -64,9 +97,11 @@ export const sendOtpMail = async (to, otp) => {
 export const sendOwnerRequestMailToAdmin = async (owner, request) => {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) {
-    console.warn("⚠️ ADMIN_EMAIL not set, skipping admin notification email.");
+    console.warn("⚠️ [Mail] ADMIN_EMAIL not set, skipping owner request email.");
     return;
   }
+
+  console.log("📮 [Mail] sendOwnerRequestMailToAdmin ->", adminEmail);
 
   await sendEmail({
     to: adminEmail,
@@ -83,6 +118,7 @@ export const sendOwnerRequestMailToAdmin = async (owner, request) => {
 };
 
 export const sendOwnerApprovalMail = async (to, name) => {
+  console.log("✅ [Mail] sendOwnerApprovalMail ->", to);
   await sendEmail({
     to,
     subject: "Your owner account has been approved",
@@ -95,6 +131,7 @@ export const sendOwnerApprovalMail = async (to, name) => {
 };
 
 export const sendOwnerRejectionMail = async (to, name, reason = "") => {
+  console.log("❌ [Mail] sendOwnerRejectionMail ->", to);
   await sendEmail({
     to,
     subject: "Your owner account has been rejected",

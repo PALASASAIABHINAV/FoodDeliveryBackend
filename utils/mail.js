@@ -1,50 +1,50 @@
 // utils/mail.js
 
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
-
 dotenv.config();
 
-// 🔐 Brevo SMTP transporter
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.BREVO_USER,
-    pass: process.env.BREVO_PASS,
-  },
-});
+import { Resend } from "resend";
 
-// (optional but useful) test connection once at startup
-transporter.verify((err, success) => {
-  if (err) {
-    console.error("❌ Brevo SMTP connection error:", err);
-  } else {
-    console.log("✅ Brevo SMTP is ready to send emails");
-  }
-});
+// ✅ Resend config (API key + from email)
+const resendApiKey = process.env.RESEND_API_KEY;
+const FROM_EMAIL = process.env.EMAIL_FROM; // e.g. "ZentroEat <onboarding@resend.dev>"
 
+if (!resendApiKey) {
+  console.warn("⚠️ RESEND_API_KEY is not set. Emails will fail.");
+}
+if (!FROM_EMAIL) {
+  console.warn("⚠️ EMAIL_FROM is not set. Emails will fail.");
+}
+
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+// Generic helper to send ANY email via Resend
 async function sendEmail({ to, subject, html }) {
+  if (!resend) {
+    throw new Error("Email service not configured (Resend missing)");
+  }
+
   try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL, // must be verified in Brevo
-      to,
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: Array.isArray(to) ? to : [to],
       subject,
       html,
     });
 
-    console.log("📧 Email sent:", info.messageId);
-  } catch (err) {
-    // ⛔ show full details in server logs
-    console.error("❌ Email send error (Brevo):", err);
+    if (error) {
+      console.error("❌ Resend email error:", error);
+      throw new Error("Failed to send email");
+    }
 
-    // IMPORTANT: rethrow the ORIGINAL error, not a generic one
+    console.log("✅ Email sent via Resend:", data);
+  } catch (err) {
+    console.error("❌ sendEmail error:", err);
     throw err;
   }
 }
 
-// ==== exported functions stay the same ====
+// ==== exported functions – same names/signatures as before ====
 
 export const sendOtpMail = async (to, otp) => {
   await sendEmail({
@@ -61,7 +61,10 @@ export const sendOtpMail = async (to, otp) => {
 
 export const sendOwnerRequestMailToAdmin = async (owner, request) => {
   const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail) return;
+  if (!adminEmail) {
+    console.warn("⚠️ ADMIN_EMAIL not set, skipping admin notification email.");
+    return;
+  }
 
   await sendEmail({
     to: adminEmail,

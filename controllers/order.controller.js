@@ -110,7 +110,7 @@ export const getUserOrders = async (req, res) => {
     let orders = await Order.find({ user: userId })
       .populate({
         path: "shopOrder.shop",
-        select: "name address city",
+        select: "name address city image",
       })
       .populate({
         path: "shopOrder.shopOrderItems.item",
@@ -186,7 +186,7 @@ export const getOwnerOrders = async (req, res) => {
       })
       .populate({
         path: "shopOrder.shop",
-        select: "name owner",
+        select: "name owner image",
       })
       .populate({
         path: "shopOrder.shopOrderItems.item",
@@ -280,7 +280,7 @@ export const updateOrderStatus = async (req, res) => {
     const order = await Order.findById(orderId)
       .populate({
         path: "shopOrder.shop",
-        select: "name owner",
+        select: "name owner image",
       })
       .populate({
         path: "shopOrder.shopOrderItems.item",

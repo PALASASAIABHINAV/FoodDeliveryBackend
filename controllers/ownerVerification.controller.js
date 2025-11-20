@@ -157,6 +157,8 @@ export const adminRejectOwner = async (req, res) => {
     // 🔥 DELETE OWNER REQUEST FROM DB
     await OwnerVerification.findByIdAndDelete(id);
 
+    //hj
+
 
     if (deleteUser) {
       await User.findByIdAndDelete(owner._id);
